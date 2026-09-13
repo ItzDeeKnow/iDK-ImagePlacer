@@ -1,5 +1,7 @@
 # idk_image_placer
 
+Standalone Resource for FiveM Servers 
+
 Place custom images anywhere in the world as real, corner-mapped textures — signs, posters, billboards, wall art. Server-synced, persists across restarts, visible to everyone.
 
 ## Video Preview
