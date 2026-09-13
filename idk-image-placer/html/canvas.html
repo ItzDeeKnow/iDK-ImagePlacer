@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+    html, body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        background: transparent; /* critical: keeps alpha channel for the runtime texture */
+        overflow: hidden;
+    }
+    #stage {
+        width: 100%;
+        height: 100%;
+        background: transparent;
+    }
+    #img {
+        /* Fills the entire texture - the 4 corners you click in-world already
+           define the target shape/aspect ratio, so the whole UV square (0-1)
+           needs to be actual image content, not letterboxed padding. */
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: fill;
+    }
+</style>
+</head>
+<body>
+    <div id="stage">
+        <img id="img" src="" draggable="false">
+    </div>
+    <script>
+        const img = document.getElementById('img');
+
+        window.addEventListener('message', (event) => {
+            const data = event.data;
+            if (!data || data.type !== 'setImage') return;
+            img.src = data.url;
+        });
+    </script>
+</body>
+</html>

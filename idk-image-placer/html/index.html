@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Image Placer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div id="toastWrap"></div>
+
+    <!-- Full-screen click-to-place overlay. Shown only while picking corners. -->
+    <div id="cornerOverlay" class="hidden">
+        <div id="crosshair"></div>
+
+        <div id="cornerHud">
+            <div class="mode-toggle" id="pickingModeToggle">
+                <button class="mode-btn" data-mode="anchor">Straight</button>
+                <button class="mode-btn" data-mode="freeform">Freeform</button>
+            </div>
+
+            <div id="cornerDots">
+                <span class="dot"></span>
+                <span class="dot"></span>
+                <span class="dot"></span>
+                <span class="dot"></span>
+            </div>
+            <div id="cornerHudText">Click corner 1 of 4</div>
+            <div class="corner-hint" id="cornerHudHint">Click to place &nbsp;&bull;&nbsp; Right-click / Backspace to undo &nbsp;&bull;&nbsp; Esc to cancel</div>
+        </div>
+
+        <div id="cornerConfirm" class="hidden">
+            <div id="anchorSizeFields">
+                <div class="field slider-field">
+                    <label>Width <span id="cornerWidthVal" class="chip">2.0m</span></label>
+                    <div class="slider-with-number">
+                        <input id="cornerWidthRange" type="range" min="0.2" max="40" step="0.1" value="2">
+                        <input id="cornerWidthNum" type="number" min="0.2" max="40" step="0.1" value="2">
+                    </div>
+                </div>
+                <div class="field slider-field">
+                    <label>Height <span id="cornerHeightVal" class="chip">2.0m</span></label>
+                    <div class="slider-with-number">
+                        <input id="cornerHeightRange" type="range" min="0.2" max="40" step="0.1" value="2">
+                        <input id="cornerHeightNum" type="number" min="0.2" max="40" step="0.1" value="2">
+                    </div>
+                </div>
+                <label class="checkbox-row" id="aspectLockRow">
+                    <input id="aspectLockToggle" type="checkbox">
+                    <span>Lock aspect ratio<span id="aspectLockHint" class="hint-inline"></span></span>
+                </label>
+                <div class="field slider-field">
+                    <label>Rotation <span id="cornerRotationVal" class="chip">0&deg;</span></label>
+                    <div class="slider-with-number">
+                        <input id="cornerRotationRange" type="range" min="-180" max="180" step="1" value="0">
+                        <input id="cornerRotationNum" type="number" min="-180" max="180" step="1" value="0">
+                    </div>
+                </div>
+            </div>
+            <div class="field slider-field">
+                <label>Opacity <span id="cornerAlphaVal" class="chip">255</span></label>
+                <input id="cornerAlphaRange" type="range" min="0" max="255" step="1" value="255">
+            </div>
+            <div class="field">
+                <label>Draw distance (meters, optional)</label>
+                <input id="cornerDrawDistanceInput" type="number" min="1" step="1" placeholder="Default">
+                <p id="cornerDrawDistanceHint" class="hint-text small">Leave blank to use the default</p>
+            </div>
+            <div class="confirm-buttons">
+                <button id="cornerRestartBtn" class="btn ghost">Restart corners</button>
+                <button id="cornerCancelBtn" class="btn ghost">Cancel</button>
+                <button id="cornerConfirmBtn" class="btn success">
+                    <svg viewBox="0 0 24 24"><path d="M4 12l5 5L20 6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+                    Place image
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="panel" class="hidden">
+        <div class="panel-glow"></div>
+
+        <div class="panel-header">
+            <div class="header-left">
+                <div class="logo-orb"><span></span></div>
+                <div>
+                    <div class="title">Image Placer</div>
+                    <div class="subtitle">Click 4 corners &middot; image fits between them</div>
+                </div>
+            </div>
+            <button id="closeBtn" class="icon-btn" title="Close">
+                <svg viewBox="0 0 24 24"><path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            </button>
+        </div>
+
+        <div class="panel-tabs">
+            <button class="tab active" data-tab="create">Create</button>
+            <button class="tab" data-tab="manage">Manage <span id="tabCount" class="tab-count hidden">0</span></button>
+            <button id="settingsTabBtn" class="tab hidden" data-tab="settings">Settings</button>
+        </div>
+
+        <div class="panel-body">
+
+            <!-- CREATE TAB -->
+            <div id="createTab" class="tab-panel">
+
+                <div class="field">
+                    <label>Image source</label>
+                    <div class="input-row">
+                        <input id="imageUrl" type="text" placeholder="https://example.com/image.png" autocomplete="off">
+                    </div>
+                </div>
+
+                <div id="previewWrap" class="preview-wrap hidden">
+                    <div class="preview-checker">
+                        <img id="previewImg" src="" alt="">
+                    </div>
+                </div>
+
+                <div class="field">
+                    <label>Placement mode</label>
+                    <div class="mode-toggle" id="createModeToggle">
+                        <button class="mode-btn active" data-mode="anchor">Straight (recommended)</button>
+                        <button class="mode-btn" data-mode="freeform">Freeform corners</button>
+                    </div>
+                    <p class="hint-text small" id="createModeHint">Click one spot on a surface, then size it with sliders - always comes out level with straight, square edges.</p>
+                </div>
+
+                <button id="startPlacingBtn" class="btn primary full">
+                    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6" fill="none"/><path d="M12 3v4M12 17v4M3 12h4M17 12h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+                    Start placing
+                </button>
+                <p class="hint-text">WASD still works while placing so you can walk into position first.</p>
+            </div>
+
+            <!-- MANAGE TAB -->
+            <div id="manageTab" class="tab-panel hidden">
+                <div class="field">
+                    <div class="manage-controls-row">
+                        <div class="input-row search-row">
+                            <svg viewBox="0 0 24 24" width="15" height="15" class="search-icon"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8" fill="none"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                            <input id="placementSearch" type="text" placeholder="Search by ID, URL, or player" autocomplete="off">
+                        </div>
+                        <select id="placementSort" title="Sort order">
+                            <option value="newest">Newest first</option>
+                            <option value="oldest">Oldest first</option>
+                            <option value="id">By ID</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="bulkToolbar" class="bulk-toolbar hidden">
+                    <label class="checkbox-row bulk-select-all">
+                        <input id="bulkSelectAll" type="checkbox">
+                        <span id="bulkSelectedCount">0 selected</span>
+                    </label>
+                    <div class="bulk-toolbar-actions">
+                        <input id="bulkAlphaInput" type="range" min="0" max="255" step="1" value="255" title="Set opacity for selected">
+                        <button id="bulkRemoveSelectedBtn" class="btn danger">Remove selected</button>
+                    </div>
+                </div>
+                <div id="placementList" class="placement-list"></div>
+                <div id="emptyState" class="empty-state">
+                    <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3" stroke="currentColor" stroke-width="1.6" fill="none"/><path d="M3 15l5-5 4 4 5-6 4 5" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <span>No placements yet</span>
+                </div>
+                <button id="removeAllBtn" class="btn danger full">Remove all placements</button>
+            </div>
+
+            <!-- SETTINGS TAB (admin only) -->
+            <div id="settingsTab" class="tab-panel hidden">
+                <div class="admin-badge">
+                    <svg viewBox="0 0 24 24"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4z" stroke="currentColor" stroke-width="1.6" fill="none"/></svg>
+                    Admin panel
+                </div>
+
+                <!-- Live stats dashboard -->
+                <div class="settings-section">
+                    <div class="settings-section-head">
+                        <span>Overview</span>
+                        <button id="refreshAdminBtn" class="icon-btn small" title="Refresh">
+                            <svg viewBox="0 0 24 24" width="14" height="14"><path d="M4 4v6h6M20 20v-6h-6M4.5 15a8 8 0 0 0 14.9 2.5M19.5 9A8 8 0 0 0 4.6 6.5" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        </button>
+                    </div>
+                    <div id="statGrid" class="stat-grid">
+                        <div class="stat-card">
+                            <div class="stat-value" id="statTotal">&mdash;</div>
+                            <div class="stat-label">Total placements</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="statPlacers">&mdash;</div>
+                            <div class="stat-label">Unique placers</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="statUptime">&mdash;</div>
+                            <div class="stat-label">Session uptime</div>
+                        </div>
+                    </div>
+                    <div id="topPlacersList" class="top-placers-list"></div>
+                </div>
+
+                <!-- Config sliders -->
+                <div class="settings-section">
+                    <div class="settings-section-head"><span>Limits &amp; defaults</span></div>
+                    <div class="slider-grid">
+                        <div class="field">
+                            <label>Max placements / player</label>
+                            <input id="setMaxPlacements" type="number" min="0" step="1">
+                        </div>
+                        <div class="field">
+                            <label>Max click distance</label>
+                            <input id="setMaxRaycast" type="number" min="1" step="1">
+                        </div>
+                        <div class="field">
+                            <label>Default draw distance</label>
+                            <input id="setDrawDistance" type="number" min="1" step="1">
+                        </div>
+                    </div>
+                    <div class="settings-btn-row">
+                        <button id="saveSettingsBtn" class="btn secondary">Apply this session</button>
+                        <button id="saveDefaultsBtn" class="btn primary">Save as server default</button>
+                    </div>
+                    <p class="hint-text small">"Apply this session" only affects you and resets on restart. "Save as server default" applies live to everyone and persists across restarts.</p>
+                </div>
+
+                <!-- Bulk placement tools -->
+                <div class="settings-section">
+                    <div class="settings-section-head"><span>Bulk tools</span></div>
+                    <div class="field">
+                        <label>Remove all placements by player</label>
+                        <div class="input-row">
+                            <select id="bulkPlayerSelect"><option value="">Select a player&hellip;</option></select>
+                            <button id="bulkRemoveByPlayerBtn" class="btn danger">Remove</button>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label>Remove placements older than</label>
+                        <div class="input-row">
+                            <input id="bulkOlderThanDays" type="number" min="1" step="1" placeholder="Days" style="max-width:90px">
+                            <button id="bulkRemoveOlderBtn" class="btn danger">Remove</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Player moderation -->
+                <div class="settings-section">
+                    <div class="settings-section-head"><span>Player access (this session)</span></div>
+                    <div id="playerModList" class="player-mod-list">
+                        <p class="hint-text small">No players loaded yet.</p>
+                    </div>
+                </div>
+
+                <!-- Activity log -->
+                <div class="settings-section">
+                    <div class="settings-section-head">
+                        <span>Recent activity</span>
+                    </div>
+                    <div id="activityLogList" class="activity-log-list">
+                        <p class="hint-text small">No activity yet.</p>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
