@@ -2,6 +2,10 @@
 
 Place custom images anywhere in the world as real, corner-mapped textures — signs, posters, billboards, wall art. Server-synced, persists across restarts, visible to everyone.
 
+## Video Preview
+- https://streamable.com/z37pr7
+- https://streamable.com/go1b16
+
 ## Requirements
 
 - [oxmysql](https://github.com/overextended/oxmysql) — started before this resource
