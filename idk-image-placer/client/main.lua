@@ -1,6 +1,9 @@
 --[[
     idk_image_placer - realtime world-space image overlay, corner-pinned
 
+    SPDX-License-Identifier: GPL-3.0-or-later
+    Copyright (C) 2026 DeeKnow of iDK Scripts
+
     Click up to 4 points in the world (corners of a window, sign, etc.) via
     screen-to-world raycast, preview a ghost quad while picking, then render
     the image as a real textured quad pinned to those 4 points - depth-tested
@@ -47,34 +50,10 @@ local function notify(msg)
     DrawNotification(false, false)
 end
 
-local function normalizeVec(v)
-    local len = #v
-    if len < 0.0001 then return vector3(0.0, 1.0, 0.0) end
-    return v / len
-end
-
-local function crossVec(a, b)
-    return vector3(
-        a.y * b.z - a.z * b.y,
-        a.z * b.x - a.x * b.z,
-        a.x * b.y - a.y * b.x
-    )
-end
-
-local function averageVec3(list)
-    local sx, sy, sz = 0.0, 0.0, 0.0
-    for _, v in ipairs(list) do
-        sx = sx + v.x
-        sy = sy + v.y
-        sz = sz + v.z
-    end
-    local n = #list
-    return vector3(sx / n, sy / n, sz / n)
-end
-
-local function computeQuadNormal(corners)
-    return normalizeVec(crossVec(corners[2] - corners[1], corners[3] - corners[1]))
-end
+local normalizeVec = Geometry.normalizeVec
+local crossVec = Geometry.crossVec
+local averageVec3 = Geometry.averageVec3
+local computeQuadNormal = Geometry.computeQuadNormal
 
 -- Sets corners/center/normal/maxDrawDistanceSq once, so the draw loop
 -- doesn't recompute the normal or a distance-culling sqrt every frame.
@@ -157,65 +136,15 @@ end
 -- anchor point + surface normal + width/height, so it's always level on a
 -- normal wall. `right`/`up` come from the normal and world-up. `rotationDeg`
 -- optionally rolls right/up around the normal, e.g. for floor decals.
-local function computeAnchorCorners(anchor, normal, width, height, rotationDeg)
-    local worldUp = vector3(0.0, 0.0, 1.0)
-    local right = crossVec(normal, worldUp)
-    if #right < 0.0001 then right = vector3(1.0, 0.0, 0.0) end -- normal ~parallel to world-up (floor/ceiling), fall back to a fixed axis
-    right = normalizeVec(right)
-    local up = normalizeVec(crossVec(right, normal))
-
-    -- CreateRuntimeTextureFromImage samples the quad a half-turn off from
-    -- the right/up axes above, so the offset is baked in here - keeps
-    -- rotationDeg=0 (the untouched default) displaying upright.
-    local rad = math.rad((rotationDeg or 0.0) + 180.0)
-    local cosA, sinA = math.cos(rad), math.sin(rad)
-    local rotRight = (right * cosA) + (up * sinA)
-    local rotUp = (up * cosA) - (right * sinA)
-    right, up = rotRight, rotUp
-
-    local halfW = (width or Config.DefaultWidth) / 2.0
-    local halfH = (height or Config.DefaultHeight) / 2.0
-
-    return {
-        anchor - (right * halfW) + (up * halfH),
-        anchor + (right * halfW) + (up * halfH),
-        anchor + (right * halfW) - (up * halfH),
-        anchor - (right * halfW) - (up * halfH)
-    }
-end
+--
+-- Pure math - lives in shared/geometry.lua so it's unit-testable outside
+-- the game (see tests/geometry_spec.lua).
+local computeAnchorCorners = Geometry.computeAnchorCorners
 
 -- Inverse of the above: given an existing (possibly crooked/freeform)
 -- quad, derives the anchor/normal/width/height/rotation of the closest
 -- straight rectangle, so re-opening it in anchor mode starts straightened.
-local function deriveAnchorFromCorners(corners)
-    local c1, c2, c3, c4 = corners[1], corners[2], corners[3], corners[4]
-    local center = averageVec3(corners)
-    local normal = computeQuadNormal(corners)
-
-    local width = (#(c2 - c1) + #(c3 - c4)) / 2.0
-    local height = (#(c1 - c4) + #(c2 - c3)) / 2.0
-
-    local worldUp = vector3(0.0, 0.0, 1.0)
-    local baseRight = crossVec(normal, worldUp)
-    if #baseRight < 0.0001 then baseRight = vector3(1.0, 0.0, 0.0) end
-    baseRight = normalizeVec(baseRight)
-
-    -- Signed angle from the "default" (rotation = 0) right vector to the
-    -- quad's actual edge direction, measured around the normal - lets the
-    -- edit prefill match the placement's original orientation.
-    local actualRight = normalizeVec(c2 - c1)
-    local cosA = math.max(-1.0, math.min(1.0,
-        baseRight.x * actualRight.x + baseRight.y * actualRight.y + baseRight.z * actualRight.z))
-    local baseUp = normalizeVec(crossVec(baseRight, normal))
-    local sinA = baseUp.x * actualRight.x + baseUp.y * actualRight.y + baseUp.z * actualRight.z
-
-    -- Undo the same 180 degree bake-in computeAnchorCorners applies, so
-    -- editing an untouched placement shows rotation=0, not 180.
-    local rotation = math.deg(math.atan(sinA, cosA)) - 180.0
-    if rotation <= -180.0 then rotation = rotation + 360.0 end
-
-    return center, normal, width, height, rotation
-end
+local deriveAnchorFromCorners = Geometry.deriveAnchorFromCorners
 
 ---------------------------------------------------------------------
 -- Camera math: turn an arbitrary screen point into a world ray. No native
@@ -798,9 +727,55 @@ local function createDuiTexture(id, imageUrl, cb)
     end)
 end
 
+-- Same idea as createDuiTexture, but the DUI page holds a looping <video>
+-- instead of an <img> - the browser fetches the URL directly, so this
+-- never touches the server-side download/base64 path (which would be a
+-- poor fit for anything video-sized anyway).
+local function createVideoTexture(id, videoUrl, cb)
+    local texW, texH = sessionConfig.canvasResolution, sessionConfig.canvasResolution
+    local duiUrl = ('https://cfx-nui-%s/html/video.html'):format(GetCurrentResourceName())
+    local dui = CreateDui(duiUrl, texW, texH)
+
+    CreateThread(function()
+        local duiHandle = nil
+        local attempts = 0
+        while not duiHandle and attempts < 200 do
+            duiHandle = GetDuiHandle(dui)
+            attempts = attempts + 1
+            Wait(10)
+        end
+
+        if not duiHandle then
+            cb(false, 'Failed to acquire DUI handle')
+            return
+        end
+
+        SendDuiMessage(dui, json.encode({ type = 'setVideo', url = videoUrl }))
+
+        local runtimeTxdName = 'imgplacer_' .. id
+        local runtimeTxn = 'tex_' .. id
+        local runtimeTxd = CreateRuntimeTxd(runtimeTxdName)
+        CreateRuntimeTextureFromDuiHandle(runtimeTxd, runtimeTxn, duiHandle)
+
+        cb(true, { dui = dui, txd = runtimeTxdName, txn = runtimeTxn, static = false })
+    end)
+end
+
 -- Tries the sharp, mipmapped static path first; only falls back to the
--- live DUI browser path if that genuinely can't handle this URL.
+-- live DUI browser path if that genuinely can't handle this URL. Video
+-- always needs the DUI (it can play); GIFs go straight to DUI too, since
+-- the static path would just freeze on a single frame.
 local function createPlacementTexture(id, imageUrl, cb)
+    if Config.EnableVideo and Media.isVideo(imageUrl) then
+        createVideoTexture(id, imageUrl, cb)
+        return
+    end
+
+    if Media.isAnimatedImage(imageUrl) then
+        createDuiTexture(id, imageUrl, cb)
+        return
+    end
+
     createStaticTexture(id, imageUrl, function(ok, result)
         if ok then
             cb(true, result)

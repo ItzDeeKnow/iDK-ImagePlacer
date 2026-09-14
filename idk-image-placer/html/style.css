@@ -393,7 +393,8 @@ input[type="text"]:focus {
     height: 140px;
 }
 
-.preview-checker img {
+.preview-checker img,
+.preview-checker video {
     max-width: 90%;
     max-height: 90%;
     filter: drop-shadow(0 6px 16px rgba(0,0,0,0.4));
@@ -585,6 +586,16 @@ input[type="range"]::-webkit-slider-thumb:hover {
     background-color: rgba(0,0,0,0.3);
     flex-shrink: 0;
     border: 1px solid var(--glass-border);
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.placement-thumb .thumb-play {
+    width: 16px;
+    height: 16px;
+    color: rgba(255,255,255,0.85);
 }
 
 .placement-info {

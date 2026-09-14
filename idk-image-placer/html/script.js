@@ -1,9 +1,12 @@
 (function () {
+    const VIDEO_EXT_RE = /\.(mp4|webm|mov|m4v)(\?.*)?$/i;
+
     const panel = document.getElementById('panel');
     const toastWrap = document.getElementById('toastWrap');
     const imageUrlInput = document.getElementById('imageUrl');
     const previewWrap = document.getElementById('previewWrap');
     const previewImg = document.getElementById('previewImg');
+    const previewVideo = document.getElementById('previewVideo');
     const startPlacingBtn = document.getElementById('startPlacingBtn');
     const closeBtn = document.getElementById('closeBtn');
     const removeAllBtn = document.getElementById('removeAllBtn');
@@ -213,11 +216,17 @@
             const metaLine = metaBits.length ? metaBits.join(' \u00b7 ') : '';
             const hasLocation = typeof p.mapX === 'number' && typeof p.mapY === 'number';
 
+            const isVideoThumb = VIDEO_EXT_RE.test(p.imageUrl);
+            const thumbStyle = isVideoThumb ? '' : `style="background-image:url('${safeImageUrl}')"`;
+            const thumbPlayBadge = isVideoThumb
+                ? '<svg class="thumb-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>'
+                : '';
+
             row.innerHTML = `
                 <label class="placement-select-wrap">
                     <input type="checkbox" class="placement-select" data-id="${p.id}" ${selectedIds.has(String(p.id)) ? 'checked' : ''}>
                 </label>
-                <div class="placement-thumb" style="background-image:url('${safeImageUrl}')"></div>
+                <div class="placement-thumb" ${thumbStyle}>${thumbPlayBadge}</div>
                 <div class="placement-info">
                     <div class="placement-id">#${p.id}</div>
                     <div class="placement-url">${shortUrl}</div>
@@ -368,17 +377,35 @@
     imageUrlInput.addEventListener('input', () => {
         const val = imageUrlInput.value.trim();
         if (val.length > 4) {
-            previewImg.onerror = () => {
-                previewWrap.classList.add('hidden');
-                detectedAspectRatio = null;
-            };
-            previewImg.onload = () => {
-                previewWrap.classList.remove('hidden');
-                if (previewImg.naturalWidth > 0 && previewImg.naturalHeight > 0) {
-                    detectedAspectRatio = previewImg.naturalWidth / previewImg.naturalHeight;
-                }
-            };
-            previewImg.src = val;
+            if (VIDEO_EXT_RE.test(val)) {
+                previewImg.classList.add('hidden');
+                previewVideo.classList.remove('hidden');
+                previewVideo.onerror = () => {
+                    previewWrap.classList.add('hidden');
+                    detectedAspectRatio = null;
+                };
+                previewVideo.onloadedmetadata = () => {
+                    previewWrap.classList.remove('hidden');
+                    if (previewVideo.videoWidth > 0 && previewVideo.videoHeight > 0) {
+                        detectedAspectRatio = previewVideo.videoWidth / previewVideo.videoHeight;
+                    }
+                };
+                previewVideo.src = val;
+            } else {
+                previewVideo.classList.add('hidden');
+                previewImg.classList.remove('hidden');
+                previewImg.onerror = () => {
+                    previewWrap.classList.add('hidden');
+                    detectedAspectRatio = null;
+                };
+                previewImg.onload = () => {
+                    previewWrap.classList.remove('hidden');
+                    if (previewImg.naturalWidth > 0 && previewImg.naturalHeight > 0) {
+                        detectedAspectRatio = previewImg.naturalWidth / previewImg.naturalHeight;
+                    }
+                };
+                previewImg.src = val;
+            }
         } else {
             previewWrap.classList.add('hidden');
             detectedAspectRatio = null;

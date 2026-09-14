@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+    html, body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        background: black; /* video has no alpha channel - matches a real screen/billboard */
+        overflow: hidden;
+    }
+    #vid {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: fill;
+    }
+</style>
+</head>
+<body>
+    <video id="vid" autoplay loop muted playsinline></video>
+    <script>
+        const vid = document.getElementById('vid');
+
+        window.addEventListener('message', (event) => {
+            const data = event.data;
+            if (!data || data.type !== 'setVideo') return;
+            vid.src = data.url;
+            vid.play().catch(() => {});
+        });
+    </script>
+</body>
+</html>

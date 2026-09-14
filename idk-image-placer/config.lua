@@ -1,3 +1,6 @@
+-- SPDX-License-Identifier: GPL-3.0-or-later
+-- Copyright (C) 2026 DeeKnow of iDK Scripts
+
 Config = {}
 
 -- Command / keybind
@@ -39,6 +42,18 @@ Config.DefaultHeight = 2.0
 -- README for why this can't just be a client-side HTTP/fetch call)
 Config.MaxImageBytes = 6 * 1024 * 1024   -- reject downloads bigger than this (raw bytes, before base64)
 Config.ImageTransferBps = 500000         -- bytes/sec used to stream the image down to the client (TriggerLatentClientEvent)
+
+-- Security: the server fetches whatever URL a player submits, so treat it
+-- like any other user-supplied-URL fetcher (see README > Security).
+Config.AllowedImageDomains = {}         -- {} = allow any public host. e.g. { 'imgur.com', 'i.imgur.com', 'cdn.discordapp.com' }
+Config.BlockPrivateNetworks = true      -- best-effort block of localhost/private/link-local hostnames
+Config.MaxDownloadsPerMinute = 20       -- per-player download rate limit (0 = unlimited)
+
+-- Video/GIF placements (rendered live via DUI - a real Chromium tab -
+-- rather than a decoded static texture, so they can autoplay/loop)
+Config.EnableVideo = true
+Config.VideoExtensions = { 'mp4', 'webm', 'mov', 'm4v' }
+Config.AnimatedImageExtensions = { 'gif' }
 
 -- Misc
 Config.Debug = false

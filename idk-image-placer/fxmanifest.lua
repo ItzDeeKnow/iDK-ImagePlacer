@@ -4,13 +4,15 @@ lua54 'yes'
 
 name 'idk_image_placer'
 author 'DeeKnow of iDK Scripts'
-description 'Realtime image overlay tool for in-game signs/props - click 4 corners, image fits between them'
-version '2.0.0'
+description 'Place images, GIFs, and video on any surface as real corner-pinned textures - MySQL persistence, admin tools, built-in security hardening'
+version '2.1.0'
 
 dependency 'oxmysql'
 
 shared_scripts {
-    'config.lua'
+    'config.lua',
+    'shared/media.lua',
+    'shared/geometry.lua'
 }
 
 client_scripts {
@@ -29,7 +31,8 @@ files {
     'html/style.css',
     'html/script.js',
     'html/canvas.html',
-    'html/normalize.html'
+    'html/normalize.html',
+    'html/video.html'
 }
 
 -- exports for other resources to trigger placement programmatically

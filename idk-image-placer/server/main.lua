@@ -1,3 +1,6 @@
+-- SPDX-License-Identifier: GPL-3.0-or-later
+-- Copyright (C) 2026 DeeKnow of iDK Scripts
+--
 -- Permission checks live server-side so they can't be bypassed via client Lua.
 --
 -- Placements are stored in MySQL via oxmysql and re-broadcast to everyone
@@ -59,6 +62,91 @@ local function logActivity(kind, playerName, placementId, detail)
 end
 
 ---------------------------------------------------------------------
+-- URL safety
+--
+-- The server fetches whatever URL a player submits (for the static
+-- texture path) and stores every placement's URL for other clients'
+-- browsers (DUI) to fetch directly. Both need the same baseline checks,
+-- applied before either the image-download handler or createPlacement
+-- accepts a URL.
+---------------------------------------------------------------------
+
+-- Best-effort only: this matches hostname/IP-literal patterns as written
+-- in the URL. It does NOT protect against DNS rebinding (a hostname that
+-- resolves to a private address only at request time) - PerformHttpRequest
+-- gives no hook into the IP it actually connects to. Pair this with
+-- Config.AllowedImageDomains for anything stronger.
+local PRIVATE_HOST_PATTERNS = {
+    '^localhost$', '^127%.', '^0%.', '^10%.',
+    '^172%.1[6-9]%.', '^172%.2%d%.', '^172%.3[01]%.',
+    '^192%.168%.', '^169%.254%.',
+    '^%[?::1%]?$', '^%[?fe80:', '%.local$', '%.internal$'
+}
+
+local function isHostBlocked(host)
+    host = host:lower()
+    for _, pattern in ipairs(PRIVATE_HOST_PATTERNS) do
+        if host:match(pattern) then return true end
+    end
+    return false
+end
+
+local function isDomainAllowed(host)
+    if not Config.AllowedImageDomains or #Config.AllowedImageDomains == 0 then
+        return true
+    end
+    host = host:lower()
+    for _, allowed in ipairs(Config.AllowedImageDomains) do
+        allowed = allowed:lower()
+        if host == allowed or host:sub(-(#allowed + 1)) == ('.' .. allowed) then
+            return true
+        end
+    end
+    return false
+end
+
+-- Returns ok, errorMessage
+local function isUrlSafe(url)
+    if type(url) ~= 'string' or url == '' then return false, 'invalid image URL' end
+
+    local scheme, host = url:match('^(https?)://([^/:?#]+)')
+    if not scheme or not host then return false, 'invalid image URL' end
+
+    if Config.BlockPrivateNetworks and isHostBlocked(host) then
+        return false, 'that host is not allowed'
+    end
+    if not isDomainAllowed(host) then
+        return false, 'that image host is not on the allowed list'
+    end
+
+    return true
+end
+
+local downloadTimestamps = {} -- [playerId] = { ts, ts, ... } within the last 60s
+
+local function isRateLimited(src)
+    local limit = Config.MaxDownloadsPerMinute
+    if not limit or limit <= 0 then return false end
+
+    local now = GetGameTimer()
+    local windowStart = now - 60000
+    local list = downloadTimestamps[src] or {}
+
+    local kept = {}
+    for _, ts in ipairs(list) do
+        if ts > windowStart then kept[#kept + 1] = ts end
+    end
+    kept[#kept + 1] = now
+    downloadTimestamps[src] = kept
+
+    return #kept > limit
+end
+
+AddEventHandler('playerDropped', function()
+    downloadTimestamps[source] = nil
+end)
+
+---------------------------------------------------------------------
 -- Image downloading
 --
 -- No client-side PerformHttpRequest, and a browser fetch() would hit CORS
@@ -104,8 +192,14 @@ RegisterNetEvent('image_placer:requestImageDownload', function(requestId, url)
         return
     end
 
-    if type(url) ~= 'string' or url == '' or not url:match('^https?://') then
-        TriggerClientEvent('image_placer:imageDownloadResult', src, requestId, false, nil, 'invalid image URL')
+    if isRateLimited(src) then
+        TriggerClientEvent('image_placer:imageDownloadResult', src, requestId, false, nil, 'too many requests, slow down')
+        return
+    end
+
+    local ok, err = isUrlSafe(url)
+    if not ok then
+        TriggerClientEvent('image_placer:imageDownloadResult', src, requestId, false, nil, err)
         return
     end
 
@@ -251,22 +345,44 @@ RegisterNetEvent('image_placer:syncPlacements', function()
     end)
 end)
 
+-- Every early-return path below needs to ack the client's nonce (so its
+-- pending create-callback doesn't hang forever) and, except for a bare
+-- permission failure, tell the player why.
+local function failCreate(src, nonce, reason)
+    if reason then
+        TriggerClientEvent('image_placer:createPlacementFailed', src, reason)
+    end
+    if nonce then
+        TriggerClientEvent('image_placer:createPlacementAck', src, nonce, nil)
+    end
+end
+
 RegisterNetEvent('image_placer:createPlacement', function(corners, imageUrl, alpha, nonce, drawDistance)
     local src = source
     if not checkAccess(src, 'use') then
-        if nonce then TriggerClientEvent('image_placer:createPlacementAck', src, nonce, nil) end
+        failCreate(src, nonce)
         return
     end
 
     if type(corners) ~= 'table' or #corners ~= 4 then return end
     if type(imageUrl) ~= 'string' or imageUrl == '' then return end
 
+    local urlOk, urlErr = isUrlSafe(imageUrl)
+    if not urlOk then
+        failCreate(src, nonce, urlErr)
+        return
+    end
+
+    if not Config.EnableVideo and Media.isVideo(imageUrl) then
+        failCreate(src, nonce, 'video placements are disabled on this server')
+        return
+    end
+
     local playerName = GetPlayerName(src)
 
     if Config.MaxPlacementsPerPlayer and Config.MaxPlacementsPerPlayer > 0 then
         if placementCountFor(playerName) >= Config.MaxPlacementsPerPlayer then
-            TriggerClientEvent('image_placer:createPlacementFailed', src, ('Limit reached (%d max placements)'):format(Config.MaxPlacementsPerPlayer))
-            if nonce then TriggerClientEvent('image_placer:createPlacementAck', src, nonce, nil) end
+            failCreate(src, nonce, ('Limit reached (%d max placements)'):format(Config.MaxPlacementsPerPlayer))
             return
         end
     end
@@ -284,8 +400,7 @@ RegisterNetEvent('image_placer:createPlacement', function(corners, imageUrl, alp
         if Config.Debug then
             print(('[image_placer] ERROR: MySQL insert failed for %s'):format(playerName))
         end
-        TriggerClientEvent('image_placer:createPlacementFailed', src, 'Database error - placement was not saved')
-        if nonce then TriggerClientEvent('image_placer:createPlacementAck', src, nonce, nil) end
+        failCreate(src, nonce, 'Database error - placement was not saved')
         return
     end
 
