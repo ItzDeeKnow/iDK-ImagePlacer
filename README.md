@@ -2,6 +2,8 @@
 
 Standalone Resource for FiveM Servers 
 
+[Watch on Streamable](https://streamable.com/z37pr7)
+
 Place custom images, GIFs, and video anywhere in the world as real, corner-mapped textures — signs, posters, billboards, wall art. Server-synced, persists across restarts, visible to everyone.
 
 ## Requirements
